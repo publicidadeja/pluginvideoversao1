@@ -1,3 +1,8 @@
+<?php
+// Garante que o WordPress Media Uploader seja carregado
+wp_enqueue_media();
+?>
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -166,6 +171,48 @@
                 justify-content: center;
             }
         }
+      
+      .midia-uploads-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.midia-item {
+    position: relative;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.midia-item img {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    display: block;
+}
+
+.remove-midia {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: rgba(255,0,0,0.8);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+}
+
+.remove-midia:hover {
+    background: rgba(255,0,0,1);
+}
     </style>
 </head>
 <body>
@@ -213,14 +260,14 @@
 
                         <!-- Container de Upload -->
                         <div class="gma-form-group full-width" id="upload-container">
-                            <label>
-                                <i class="dashicons dashicons-format-image"></i> Mídia
-                            </label>
-                            <div id="midia-uploads" class="midia-uploads-grid"></div>
-                            <button type="button" id="add-midia" class="gma-button secondary">
-                                <i class="dashicons dashicons-plus"></i> Adicionar Mídia
-                            </button>
-                        </div>
+    <label>
+        <i class="dashicons dashicons-format-gallery"></i> Mídia
+    </label>
+    <div id="midia-uploads" class="midia-uploads-grid"></div>
+    <button type="button" id="add-midia" class="gma-button secondary">
+        <i class="dashicons dashicons-plus"></i> Adicionar Mídia
+    </button>
+</div>
 
                         <!-- Container de Vídeo -->
                         <div class="gma-form-group full-width" id="video-container" style="display:none;">
@@ -432,29 +479,85 @@
             });
 
             // Validação do formulário
-            $('#gma-material-form').on('submit', function(e) {
-                let isValid = true;
-                const tipo = $('#tipo_midia').val();
-                
-                if ((tipo === 'imagem' || tipo === 'carrossel') && !$('.midia-item').length) {
-                    alert('Adicione pelo menos uma imagem.');
-                    isValid = false;
-                }
-                
-                $(this).find('[required]').each(function() {
-                    if (!$(this).val()) {
-                        isValid = false;
-                        $(this).addClass('error').shake();
-                    } else {
-                        $(this).removeClass('error');
-                    }
-                });
+$('#gma-material-form').on('submit', function(e) {
+    e.preventDefault();
+    let isValid = true;
+    const tipo = $('#tipo_midia').val();
+    
+    // Validação específica para carrossel
+    if (tipo === 'carrossel') {
+        const numImages = $('.midia-item').length;
+        if (numImages < 2) {
+            alert('Para carrossel, selecione pelo menos 2 imagens.');
+            isValid = false;
+        }
+    }
+    
+    // Validação para imagem única
+    else if (tipo === 'imagem') {
+        if (!$('.midia-item').length) {
+            alert('Adicione uma imagem.');
+            isValid = false;
+        }
+    }
+    
+    // Validação para vídeo
+    else if (tipo === 'video') {
+        const videoUrl = $('#video_url').val();
+        if (!videoUrl) {
+            $('#video_url').addClass('error').shake();
+            isValid = false;
+        }
+    }
+    
+    // Validação dos campos obrigatórios
+    $(this).find('[required]').each(function() {
+        if (!$(this).val().trim()) {
+            isValid = false;
+            $(this).addClass('error').shake();
+        } else {
+            $(this).removeClass('error');
+        }
+    });
 
-                if (!isValid) {
-                    e.preventDefault();
-                    alert('Por favor, preencha todos os campos obrigatórios.');
-                }
-            });
+    // Validação da campanha
+    if (!$('#campanha_id').val()) {
+        $('#campanha_id').addClass('error').shake();
+        isValid = false;
+    }
+
+    // Se tudo estiver válido, envia o formulário
+    if (isValid) {
+        this.submit();
+    } else {
+        alert('Por favor, verifique os campos destacados.');
+    }
+});
+
+// Limpar erros ao modificar campo
+$('input, select, textarea').on('input change', function() {
+    $(this).removeClass('error');
+});
+
+// Adicione este CSS para melhor feedback visual
+$('<style>')
+    .text(`
+        .error {
+            border-color: #ff0000 !important;
+            box-shadow: 0 0 5px rgba(255,0,0,0.3) !important;
+        }
+        .midia-item {
+            transition: all 0.3s ease;
+        }
+        .midia-item:hover .remove-midia {
+            opacity: 1;
+        }
+        .remove-midia {
+            opacity: 0.7;
+            transition: opacity 0.3s ease;
+        }
+    `)
+    .appendTo('head');
 
             // Efeito shake para campos com erro
             $.fn.shake = function() {
@@ -468,6 +571,39 @@
                 });
             };
         });
+      
+      let mediaUploader;
+$('#add-midia').on('click', function(e) {
+    e.preventDefault();
+    
+    if (!mediaUploader) {
+        mediaUploader = wp.media({
+            title: 'Selecionar Mídia',
+            button: {
+                text: 'Usar estas imagens'
+            },
+            multiple: true  // Habilita seleção múltipla
+        });
+
+        mediaUploader.on('select', function() {
+            const attachments = mediaUploader.state().get('selection').toJSON();
+            $('#midia-uploads').empty(); // Limpa previews anteriores
+            
+            attachments.forEach(attachment => {
+                const preview = `
+                    <div class="midia-item">
+                        <img src="${attachment.url}" alt="Preview">
+                        <input type="hidden" name="midias[]" value="${attachment.url}">
+                        <button type="button" class="remove-midia">×</button>
+                    </div>
+                `;
+                $('#midia-uploads').append(preview);
+            });
+        });
+    }
+
+    mediaUploader.open();
+});
     </script>
 
     <?php wp_footer(); ?>
